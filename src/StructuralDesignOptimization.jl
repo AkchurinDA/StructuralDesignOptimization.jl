@@ -1,3 +1,5 @@
 module StructuralDesignOptimization
 
-end
+greet() = print("Hello World!")
+
+end # module StructuralDesignOptimization

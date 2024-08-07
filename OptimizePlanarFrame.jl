@@ -1,17 +1,24 @@
 # AUTHOR:               Damir Akchurin
-# DATE CREATED:         08/06/2024
+# DATE CREATED:         08/07/2024
 # DATE LAST MODIFIED:   08/07/2024
 
 # Preamble:
-import PyCall #V1.96.4
+import PyCall          # V1.96.4
+import Optimization    # V3.27.0
+import OptimizationMOI # V0.4.2
+import Ipopt           # V1.6.5
+import FiniteDiff      # V2.23.1
+import XLSX            # V0.10.1
+import DataFrames      # V1.6.1
+import LinearAlgebra   # Standard Library
 
 # Load the OpenSeesPy package:
 ops = PyCall.pyimport("openseespy.opensees")
 
 # Define an OpenSeesPy model of a planar frame subjected to gravity loads:
-function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
+function PlanarFrame(u, p)
     # Unpack the design variables and parameters:
-    A_C, A_B, I_C, I_B, Z_C, Z_B = x
+    A_C, A_B, I_C, I_B, Z_C, Z_B = u
     w_D, ρ = p
 
     # Remove any previous models:
@@ -132,6 +139,53 @@ function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
     return Weight
 end
 
-# Run the model:
-PlanarFrame([10, 10, 100, 100, 0, 0], [-10 / 12, 490 / 12 ^ 3])
+# Define the constraints:
+EnvelopingConstraintsC = float.(XLSX.readxlsx("Enveloping Constraints.xlsx")["Columns"][2:end, :])
+A_C = EnvelopingConstraintsC[:, 1:3]
+b_C = EnvelopingConstraintsC[:, 4]
 
+EnvelopingConstraintsB = float.(XLSX.readxlsx("Enveloping Constraints.xlsx")["Beams"][2:end, :])
+A_B = EnvelopingConstraintsB[:, 1:3]
+b_B = EnvelopingConstraintsB[:, 4]
+
+TotalNumEnvelopingConstraints = size(EnvelopingConstraintsC, 1) + size(EnvelopingConstraintsB, 1)
+LowerBound = fill(-Inf, TotalNumEnvelopingConstraints)
+UpperBound = [b_C; b_B]
+LowerBound = [  3.840;   3.550;    39.600;    11.300;   11.400;    6.280; LowerBound]
+UpperBound = [257.000; 272.000; 18100.000; 73000.000; 2030.000; 4130.000; UpperBound]
+
+function Constraints(res, u, p)
+    BC = u
+
+    # Define the enveloping constraints:
+    u_C  = u[[1, 3, 5]]
+    u_B  = u[[2, 4, 6]]
+    EC_C = A_C * u_C
+    EC_B = A_B * u_B
+
+    # Combine the constraints:
+    EC   = [BC; EC_C; EC_B]
+
+    return (res .= EC)
+end
+
+# Define the callback function:
+Storage = []
+function Callback(s, l)
+    # Extract the state of the optimization problem:
+    CurrentState = [s.iter, s.u, s.objective]
+
+    # Store the state of the optimization problem:
+    push!(Storage, deepcopy(CurrentState))
+
+    return false
+end
+
+# Define the initial values:
+u₀ = [10.0, 10.0, 100.0, 100.0, 100.0, 100.0]
+p₀ = [-10 / 12, 490 / 12 ^ 3]
+
+# Solve the optimization problem:
+Objective = Optimization.OptimizationFunction(PlanarFrame, Optimization.AutoFiniteDiff(), cons = Constraints)
+Problem   = Optimization.OptimizationProblem(Objective, u₀, p₀, lcons = LowerBound, ucons = UpperBound)
+Solution  = Optimization.solve(Problem, Ipopt.Optimizer(), callback = Callback; tol = 1E-3)

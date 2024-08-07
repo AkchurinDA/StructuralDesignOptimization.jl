@@ -20,6 +20,3 @@ OptimizationMOI = "fd9f6733-72f4-499f-8506-86b2bdd0dea1"
 Polyhedra = "67491407-f73d-577b-9b50-8179a7c68029"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
-
-[compat]
-LinearAlgebra = "1.11.0"

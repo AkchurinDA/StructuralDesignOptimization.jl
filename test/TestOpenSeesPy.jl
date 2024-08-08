@@ -1,24 +1,55 @@
 # AUTHOR:               Damir Akchurin
 # DATE CREATED:         08/06/2024
-# DATE LAST MODIFIED:   08/07/2024
+# DATE LAST MODIFIED:   08/08/2024
 
 # Preamble:
-import PyCall #V1.96.4
+import PyCall                       # V1.96.4
+import StructuralDesignOptimization # Under development
 
 # Load the OpenSeesPy package:
 ops = PyCall.pyimport("openseespy.opensees")
 
 # Define an OpenSeesPy model of a planar frame subjected to gravity loads:
-function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
+function PlanarFrame(u, p)
+    # --------------------------------------------------
+    # USER INPUT
+    # --------------------------------------------------
     # Unpack the design variables and parameters:
-    A_C, A_B, I_C, I_B, Z_C, Z_B = x
-    w_D, ρ = p
+    A_g_B, A_g_C, I_x_B, I_x_C, Z_x_B, Z_x_C = u
+    w_D, ρ, NumSubdivisions, NumSteps = p
 
-    # Define the nodes:
-    Nodes = []
-
+    # Define the Nodes:
+    # [Node ID, x-coordinate, y-coordinate]
+    Nodes = [
+        (1,  0 * 12, 10 * 12)
+        (2, 10 * 12, 10 * 12)
+        (3,  0 * 12,  0 * 12)
+        (4, 10 * 12,  0 * 12)]
+    
     # Define the elements:
-    Elements = []
+    # [Element ID, Node (i) ID, Node (j) ID, Young's modulus, Gross cross-sectional area, Moment of inertia]
+    Elements = [
+        (1, 1, 2, 29000, A_g_B, I_x_B)
+        (2, 3, 1, 29000, A_g_C, I_x_C)
+        (3, 4, 2, 29000, A_g_C, I_x_C)]
+
+    # Define the boundary conditions:
+    BoundaryConditions = [
+        (3, 1, 1, 1)
+        (4, 1, 1, 1)]
+
+    # Define the distributed loads:
+    DistributedLoads = [
+        (1, w_D)]
+
+    # --------------------------------------------------
+    # DO NOT MODIFY THE CODE BELOW
+    # --------------------------------------------------
+    # Subdivide the elements:
+    NewNodes, NewElements, _, ElementMap = StructuralDesignOptimization.SubdivideElements(Nodes, Elements, NumSubdivisions)
+
+    # Compute the element properties of the original elements:
+    L, α = StructuralDesignOptimization.ComputeElementProperties(NewNodes, NewElements)
 
     # Remove any previous models:
     ops.wipe()
@@ -26,95 +57,37 @@ function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
     # Define the model parameters:
     ops.model("basic", "-ndm", 2, "-ndf", 3)
 
-    # Define the nodes:
-    ops.node( 1,  0 * 12, 10 * 12) # Beam
-    ops.node( 2,  1 * 12, 10 * 12)
-    ops.node( 3,  2 * 12, 10 * 12)
-    ops.node( 4,  3 * 12, 10 * 12)
-    ops.node( 5,  4 * 12, 10 * 12)
-    ops.node( 6,  5 * 12, 10 * 12)
-    ops.node( 7,  6 * 12, 10 * 12)
-    ops.node( 8,  7 * 12, 10 * 12)
-    ops.node( 9,  8 * 12, 10 * 12)
-    ops.node(10,  9 * 12, 10 * 12)
-    ops.node(11, 10 * 12, 10 * 12)
-    ops.node(12,  0 * 12,  0 * 12) # L. column
-    ops.node(13,  0 * 12,  1 * 12)
-    ops.node(14,  0 * 12,  2 * 12)
-    ops.node(15,  0 * 12,  3 * 12)
-    ops.node(16,  0 * 12,  4 * 12)
-    ops.node(17,  0 * 12,  5 * 12)
-    ops.node(18,  0 * 12,  6 * 12)
-    ops.node(19,  0 * 12,  7 * 12)
-    ops.node(20,  0 * 12,  8 * 12)
-    ops.node(21,  0 * 12,  9 * 12)
-    ops.node(22, 10 * 12,  0 * 12) # R. column
-    ops.node(23, 10 * 12,  1 * 12)
-    ops.node(24, 10 * 12,  2 * 12)
-    ops.node(25, 10 * 12,  3 * 12)
-    ops.node(26, 10 * 12,  4 * 12)
-    ops.node(27, 10 * 12,  5 * 12)
-    ops.node(28, 10 * 12,  6 * 12)
-    ops.node(29, 10 * 12,  7 * 12)
-    ops.node(30, 10 * 12,  8 * 12)
-    ops.node(31, 10 * 12,  9 * 12)
+    # Define the Nodes:
+    for NewNode in NewNodes
+        ops.node(NewNode...)
+    end
 
     # Define the boundary conditions:
-    ops.fix(12, 1, 1, 1)
-    ops.fix(22, 1, 1, 1)
+    for BoundaryCondition in BoundaryConditions
+        ops.fix(BoundaryCondition...)
+    end
 
     # Define the cross-sectional properties:
-    ops.section("Elastic", 1, 29000, A_B, I_B) # Beam
-    ops.section("Elastic", 2, 29000, A_C, I_C) # Columns
+    for NewElement in NewElements
+        ops.section("Elastic", NewElement[1], NewElement[4], NewElement[5], NewElement[6])
+    end
 
     # Define the transformation:
     ops.geomTransf("PDelta", 1)
 
     # Define the elements:
-    ops.element("elasticBeamColumn",  1,  1,  2, 1, 1) # Beam
-    ops.element("elasticBeamColumn",  2,  2,  3, 1, 1)
-    ops.element("elasticBeamColumn",  3,  3,  4, 1, 1)
-    ops.element("elasticBeamColumn",  4,  4,  5, 1, 1)
-    ops.element("elasticBeamColumn",  5,  5,  6, 1, 1)
-    ops.element("elasticBeamColumn",  6,  6,  7, 1, 1)
-    ops.element("elasticBeamColumn",  7,  7,  8, 1, 1)
-    ops.element("elasticBeamColumn",  8,  8,  9, 1, 1)
-    ops.element("elasticBeamColumn",  9,  9, 10, 1, 1)
-    ops.element("elasticBeamColumn", 10, 10, 11, 1, 1)
-    ops.element("elasticBeamColumn", 11, 12, 13, 2, 1) # L. column
-    ops.element("elasticBeamColumn", 12, 13, 14, 2, 1)
-    ops.element("elasticBeamColumn", 13, 14, 15, 2, 1)
-    ops.element("elasticBeamColumn", 14, 15, 16, 2, 1)
-    ops.element("elasticBeamColumn", 15, 16, 17, 2, 1)
-    ops.element("elasticBeamColumn", 16, 17, 18, 2, 1)
-    ops.element("elasticBeamColumn", 17, 18, 19, 2, 1)
-    ops.element("elasticBeamColumn", 18, 19, 20, 2, 1)
-    ops.element("elasticBeamColumn", 19, 20, 21, 2, 1)
-    ops.element("elasticBeamColumn", 20, 21,  1, 2, 1)
-    ops.element("elasticBeamColumn", 21, 22, 23, 2, 1) # R. column
-    ops.element("elasticBeamColumn", 22, 23, 24, 2, 1)
-    ops.element("elasticBeamColumn", 23, 24, 25, 2, 1)
-    ops.element("elasticBeamColumn", 24, 25, 26, 2, 1)
-    ops.element("elasticBeamColumn", 25, 26, 27, 2, 1)
-    ops.element("elasticBeamColumn", 26, 27, 28, 2, 1)
-    ops.element("elasticBeamColumn", 27, 28, 29, 2, 1)
-    ops.element("elasticBeamColumn", 28, 29, 30, 2, 1)
-    ops.element("elasticBeamColumn", 29, 30, 31, 2, 1)
-    ops.element("elasticBeamColumn", 30, 31, 11, 2, 1)
+    for NewElement in NewElements
+        ops.element("elasticBeamColumn", NewElement[1], NewElement[2], NewElement[3], NewElement[1], 1)
+    end
 
     # Define the loads:
     ops.timeSeries("Linear", 1)
     ops.pattern("Plain", 1, 1)
-    ops.eleLoad("-ele",  1, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  2, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  3, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  4, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  5, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  6, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  7, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  8, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele",  9, "-type", "-beamUniform", w_D)
-    ops.eleLoad("-ele", 10, "-type", "-beamUniform", w_D)
+    for DistributedLoads in DistributedLoads
+        for i in ElementMap[DistributedLoads[1], 2:end]
+            ops.eleLoad("-ele", i, "-type", "-beamUniform", DistributedLoads[2])
+        end
+    end
 
     # Define the solver parameters:
     ops.system("BandSPD")
@@ -123,21 +96,58 @@ function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
     ops.algorithm("Linear")
 
     # Solve:
-    NumSteps = 10
     ops.integrator("LoadControl", 1 / NumSteps)
     ops.analysis("Static")
     ops.analyze(NumSteps)
 
-    # Get the internal bending moment at each node:
-    # ElementForces = [ops.eleForce(i) for i in 1:30]
+    # Compute the internal element forces in global coordinates:
+    GlobalElementForces = [ops.eleForce(i) for i in eachindex(NewElements)]
+
+    # Compute the internal element forces in local coordinates:
+    LocalElementForces = StructuralDesignOptimization.ConvertElementForcesG2L(NewElements, GlobalElementForces, α)
+
+    # Convert the internal forces to a common sign convention:
+    LocalElementForces[:, 1:3] = (-1) * LocalElementForces[:, 1:3]
+
+    # Extract the internal forces:
+    N = zeros(length(Elements), 1 + NumSubdivisions + 1) # Interal axial forces
+    M = zeros(length(Elements), 1 + NumSubdivisions + 1) # Interal bending moments
+    for Element in Elements
+        N[Element[1], 1] = Element[1]
+        M[Element[1], 1] = Element[1]
+
+        for i in 1:NumSubdivisions
+            N[Element[1], 1 + i] = LocalElementForces[ElementMap[Element[1], 1 + i], 1]
+            M[Element[1], 1 + i] = LocalElementForces[ElementMap[Element[1], 1 + i], 3]
+
+            if i == NumSubdivisions
+                N[Element[1], 1 + i + 1] = LocalElementForces[ElementMap[Element[1], 1 + i], 4]
+                M[Element[1], 1 + i + 1] = LocalElementForces[ElementMap[Element[1], 1 + i], 6]
+            end
+        end
+    end
+
+    # Compute the required strengths:
+    M_r = Float64[]
+    P_r = Float64[]
+    for Element in Elements
+        # Find the point of maximum bending moment:
+        _, M_r_temp_loc = findmax(abs.(M[Element[1], 2:end]))
+
+        # Find the bending moment and axial force at the point of maximum bending moment:
+        M_r_temp = M[Element[1], 1 + M_r_temp_loc]
+        P_r_temp = N[Element[1], 1 + M_r_temp_loc]
+
+        push!(M_r, M_r_temp)
+        push!(P_r, P_r_temp)
+    end
 
     # Compute the weight of the structure:
-    Weight = ρ * (10 * 120 * A_B + 2 * 10 * 120 * A_C)
+    Weight = ρ * (10 * 12 * A_g_B + 2 * 10 * 12 * A_g_C)
 
     # Return the result:
-    return Weight
+    return Weight, P_r, M_r
 end
 
 # Run the model:
-PlanarFrame([10, 10, 100, 100, 0, 0], [-10 / 12, 490 / 12 ^ 3])
-
+Weight, P_r, M_r = PlanarFrame((10, 10, 100, 100, 0, 0), (-10 / 12, 490 / 12 ^ 3, 10, 10))

@@ -1,4 +1,12 @@
 module StructuralDesignOptimization
 include("ComputeDesignStrengths.jl")
-export ComputeDesignCompressiveStrength, ComputeDesignFlexuralStrength
+export ComputeDesignTensileStrength
+export ComputeDesignCompressiveStrength
+export ComputeDesignFlexuralStrength
+include("ComputeBeamColumnInteraction.jl")
+export ComputeBeamColumnInteraction
+include("OpenSeesPyUtilities.jl")
+export SubdivideElements
+export ComputeElementProperties
+export ConvertElementForcesG2L
 end

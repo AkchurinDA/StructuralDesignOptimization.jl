@@ -1,3 +1,16 @@
+# NOTE: Refer to Chapter D of the AISC 360-22 Specification for more information.
+function ComputeDesignTensileStrength(ϕ_t, F_y, A_g)
+    # Compute the nominal tensile strength:
+    P_n = F_y * A_g
+
+    # Compute the design tensile strength:
+    P_c = ϕ_t * P_n
+
+    # Return the result:
+    return P_c
+end
+
+# NOTE: Refer to Chapter E of the AISC 360-22 Specification for more information.
 function ComputeDesignCompressiveStrength(ϕ_c, E, F_y, K, L, A_g, I_x)
     # Compute the radius of gyration:
     r = sqrt(I_x / A_g)
@@ -25,6 +38,7 @@ function ComputeDesignCompressiveStrength(ϕ_c, E, F_y, K, L, A_g, I_x)
     return P_c
 end
 
+# NOTE: Refer to Chapter F of the AISC 360-22 Specification for more information.
 function ComputeDesignFlexuralStrength(ϕ_b, F_y, Z_x)
     # Compute the nominal flexural strength:
     M_n = F_y * Z_x

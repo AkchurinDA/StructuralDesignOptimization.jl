@@ -1,5 +1,4 @@
 module StructuralDesignOptimization
-
-greet() = print("Hello World!")
-
-end # module StructuralDesignOptimization
+include("ComputeDesignStrengths.jl")
+export ComputeDesignCompressiveStrength, ComputeDesignFlexuralStrength
+end

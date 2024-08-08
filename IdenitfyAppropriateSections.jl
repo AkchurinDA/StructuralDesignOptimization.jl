@@ -11,29 +11,38 @@ E   = 29000
 F_y = 50
 
 # Load all the sections from the AISC Construction Design Manual:
-SectionDatabase = DataFrames.DataFrame(XLSX.readtable("Section Database.xlsx", "All sections"))
+AllSections = DataFrames.DataFrame(XLSX.readtable("Sections.xlsx", "All sections"))
 
 # Extract the data:
-SectionNames = string.(SectionDatabase[:, :Section])
-d            = float.(SectionDatabase[:, :d])
-b_f          = float.(SectionDatabase[:, :b_f])
-t_f          = float.(SectionDatabase[:, :t_f])
-t_w          = float.(SectionDatabase[:, :t_w])
+d            = float.(AllSections[:, :d])
+b_f          = float.(AllSections[:, :b_f])
+t_f          = float.(AllSections[:, :t_f])
+t_w          = float.(AllSections[:, :t_w])
 
-# Check the sections:
-AppropriateIndex = Vector{Bool}(undef, size(SectionDatabase, 1))
+# Check the sections whether they are non-slender in compression and compact in flexure:
+AllAppropriateSectionsIndex = Vector{Bool}(undef, size(AllSections, 1))
 for (i, (d, b_f, t_f, t_w)) in enumerate(zip(d, b_f, t_f, t_w))
     CheckC = CheckSectionC(E, F_y, d, b_f, t_f, t_w)
     CheckF = CheckSectionF(E, F_y, d, b_f, t_f, t_w)
 
-    AppropriateIndex[i] = CheckC && CheckF ? true : false
+    AllAppropriateSectionsIndex[i] = CheckC && CheckF ? true : false
 end
 
-# Extract the appropriate sections:
-AppropriateSections = SectionDatabase[AppropriateIndex, :]
+# Extract all appropriate sections:
+AllAppropriateSections = SectionDatabase[AllAppropriateSectionsIndex, :]
 
-# Write the appropriate sections to a new Excel file:
-XLSX.writetable("Appropriate Section Database.xlsx", "Appropriate sections" => AppropriateSections)
+# Extract the appropriate sections for beams and columns:
+# NOTE: This step is done manually by the user depending on the typical practical considerations.
+AppropriateSectionsB = AllAppropriateSections
+AppropriateSectionsC = AllAppropriateSections[90:161, :]
+
+# Update the Excel file:
+XLSX.writetable("Sections.xlsx", 
+    "All sections"                   => AllSections,
+    "All appropriate sections"       => AllAppropriateSections,
+    "Appropriate sections (Beams)"   => AppropriateSectionsB,
+    "Appropriate sections (Columns)" => AppropriateSectionsC,
+    overwrite = true)
 
 # Define a function that checks if a section is non-slender in compression:
 # NOTE: See Table B4.1a of the AISC 360-22 Specification for more information.

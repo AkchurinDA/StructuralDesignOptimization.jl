@@ -14,6 +14,12 @@ function PlanarFrame(x::AbstractVector{<:Real}, p::AbstractVector{<:Real})
     A_C, A_B, I_C, I_B, Z_C, Z_B = x
     w_D, ρ = p
 
+    # Define the nodes:
+    Nodes = []
+
+    # Define the elements:
+    Elements = []
+
     # Remove any previous models:
     ops.wipe()
 

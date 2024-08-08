@@ -14,8 +14,8 @@
 ```mermaid
 flowchart TB
     A["Identify non-slender (compression) and compact (flexure) sections \n from the Steel Construction Manual"]
-    A -->|Beams| B["Identify appropriate sections \n based on typical practical considerations"]
-    A -->|Columns| C["Identify appropriate sections \n based on typical practical considerations"]
+    A -->|Columns| B["Identify appropriate sections \n based on typical practical considerations"]
+    A -->|Beams| C["Identify appropriate sections \n based on typical practical considerations"]
     B --> D["Extract section properties"]
     C --> E["Extract section properties"]
     D --> F["Generate enveloping constraints"]
@@ -24,4 +24,13 @@ flowchart TB
     E --> I["Generate box constraints"]
     F -->|Optional| J["Reduce the number of enveloping constraints \n by removing the constraints corresponding \n to faces of a convex hull with small surface areas"]
     H -->|Optional| K["Reduce the number of enveloping constraints \n by removing the constraints corresponding \n to faces of a convex hull with small surface areas"]
+```
+
+## Generating Stress Constraints
+
+```mermaid
+flowchart TB
+    A["Given a section"]
+    A --> B["Compute its nominal compressive \n resistance $$\phi_{c} P_{n}$$"]
+    A --> C["Compute its nominal flexural \n resistance $$\phi_{b} M_{n}$$"]
 ```

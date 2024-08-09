@@ -229,8 +229,8 @@ end
 
 # Define the initial values:
 u₀ = [
-    20.0, 450.0, 40.0, 
-    10.0,  40.0, 15.0]
+    20.0, 1000.0, 100.0, 
+    10.0,  500.0,  50.0]
 p₀ = [-10 / 12, 490 / 12 ^ 3, 10, 10]
 
 # Solve the optimization problem:
@@ -242,81 +242,77 @@ Problem   = Optimization.OptimizationProblem(Objective, u₀, p₀,
     ucons = UpperBound)
 Solution  = Optimization.solve(Problem, Ipopt.Optimizer(), callback = Callback; tol = 1E-3, acceptable_tol = 1E-3, max_iter = 100)
 
+# Solution for the beams' section properties:
+SolutionB = Matrix{Float64}(undef, length(Storage), 3)
+for (i, State) in enumerate(Storage)
+    SolutionB[i, :] = State[2][1:3]
+end
+
+# Solution for the columns' section properties:
+SolutionC = Matrix{Float64}(undef, length(Storage), 3)
+for (i, State) in enumerate(Storage)
+    SolutionC[i, :] = State[2][4:6]
+end
+
 # Plot the solution:
 begin
-    F = Figure(size = 72 .* (12, 6), fontsize = 16)
+    F = Figure(size = 72 .* (8, 8))
 
-    A = Axis3(F[1, 1],
-        xlabel         = L"$A_g$ (in.$^2$)", 
-        xlabelrotation = 0,
-        ylabel         = L"$I_x$ (in.$^4$)", 
-        ylabelrotation = 0,
-        zlabel         = L"$Z_x$ (in.$^3$)", 
-        zlabelrotation = π / 2,
-        protrusions    = 75,
-        aspect         = (1, 1, 1 / 2),
-        azimuth        = π / 6,
-        elevation      = π / 9)
+    A = Axis(F[1, 1],
+        xlabel = L"Iteration, $i$",
+        ylabel = L"$A_{g}$ (in.$^2$)",
+        limits = (0, length(Storage) - 1, 0, nothing),
+        aspect = 16 / 9)
 
-    # Columns:
-    SolutionC = Matrix{Float64}(undef, length(Storage), 3)
-    for (i, State) in enumerate(Storage)
-        SolutionC[i, :] = State[2][1:3]
-    end
-
-    lines!(A, SolutionC,
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionB[:, 1],
         color      = :crimson,
-        linewidth  = 1)
+        linewidth  = 1,
+        markersize = 6)
 
-    scatter!(A, (u₀[1:3]...), 
-        label       = "Initial guess for columns", 
-        color       = :crimson, 
-        marker      = :circle, 
-        strokecolor = :black, 
-        strokewidth = 1,
-        overdraw    = true)
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionC[:, 1],
+        color      = :steelblue,
+        linewidth  = 1,
+        markersize = 6)
 
-    scatter!(A, (Solution.u[1:3]...), 
-        label       = "Optimal solution for columns", 
-        color       = :crimson, 
-        marker      = :rect, 
-        strokecolor = :black, 
-        strokewidth = 1,
-        overdraw    = true)
+    A = Axis(F[2, 1],
+        xlabel = L"Iteration, $i$",
+        ylabel = L"$I_{x}$ (in.$^4$)",
+        limits = (0, length(Storage) - 1, 0, nothing),
+        aspect = 16 / 9)
 
-    # Beams:
-    SolutionB = Matrix{Float64}(undef, length(Storage), 3)
-    for (i, State) in enumerate(Storage)
-        SolutionB[i, :] = State[2][4:6]
-    end
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionB[:, 2],
+        color      = :crimson,
+        linewidth  = 1,
+        markersize = 6)
 
-    lines!(A, SolutionB,
-        color      = :deepskyblue,
-        linewidth  = 1)
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionC[:, 2],
+        color      = :steelblue,
+        linewidth  = 1,
+        markersize = 6)
 
-    scatter!(A, (u₀[4:6]...),
-        label       = "Initial guess for beams", 
-        color       = :deepskyblue, 
-        marker      = :circle, 
-        strokecolor = :black, 
-        strokewidth = 1,
-        overdraw    = true)
+    A = Axis(F[3, 1],
+        xlabel = L"Iteration, $i$",
+        ylabel = L"$Z_{x}$ (in.$^3$)",
+        limits = (0, length(Storage) - 1, 0, nothing),
+        aspect = 16 / 9)
 
-    scatter!(A, (Solution.u[4:6]...), 
-        label       = "Optimal solution for beams", 
-        color       = :deepskyblue, 
-        marker      = :rect, 
-        strokecolor = :black, 
-        strokewidth = 1,
-        overdraw    = true)
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionB[:, 3], label = "Beam",
+        color      = :crimson,
+        linewidth  = 1,
+        markersize = 6)
 
-    axislegend(A, position = :ct, nbanks = 2)
+    scatterlines!(A, 0:(length(Storage) - 1), SolutionC[:, 3], label = "Columns",
+        color      = :steelblue,
+        linewidth  = 1,
+        markersize = 6)
 
-    A = Axis(F[1, 2],
+    Legend(F[4, 1], A, nbanks = 2, tellwidth = false, tellheight = true, framevisible = false)
+
+    A = Axis(F[1:3, 2],
         xlabel = L"Iteration, $i$",
         ylabel = L"Weight, $W$ (lb)",
-        limits = (0, (length(Storage) - 1), 0, nothing),
-        aspect = 4 / 3)
+        limits = (0, length(Storage) - 1, 0, nothing),
+        aspect = 16 / 9)
 
     SolutionObjectiveFunction = Vector{Float64}(undef, length(Storage))
     for (i, State) in enumerate(Storage)
@@ -334,7 +330,7 @@ begin
         text = L"$%$(floor(Int, SolutionObjectiveFunction[end]))$ lb",
         align = (:right, :bottom))
 
-    # display(F)
+    display(F)
 end
 
 # Save the plot:

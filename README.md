@@ -12,10 +12,10 @@ This repository aims to reconstruct the two-step structural design optimization 
   - Reduce the set into two sets for beam and column members, respectively, based on the typical practical considerations.
 - [x] Generate enveloping constraints using the section properties ($A_{g}$, $I_{x}$, $Z_{x}$) of these sets of appropriate sections.
   - If the number of the enveloping constraints was reduced in any way, generate box constraints as well.
-- [ ] Generate stress constraints based on the beam-column interaction equations.
+- [x] Generate stress constraints based on the beam-column interaction equations.
   - Compute the available strengths for each member in a frame ($\varphi_{c} P_{n}$, $\varphi_{b} M_{n}$).
-  - Evaluate the FE model of the frame and extract the internal loads at each node ($P_{r}$, $M_{r}$).
-  - ...
+  - Evaluate the FE model of the frame and extract the required strengths for each member ($P_{r}$, $M_{r}$).
+  - Evaluate the beam-column interaction equation for each member.
 - [ ] Compile most of this functionality into a reusable package.
 
 ## Typical Practical Considerations

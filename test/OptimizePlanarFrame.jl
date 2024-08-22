@@ -1,39 +1,41 @@
-# AUTHOR:               Damir Akchurin
-# DATE CREATED:         08/07/2024
-# DATE LAST MODIFIED:   08/08/2024
-
 # Preamble:
-import PyCall                       # V1.96.4
-import Optimization                 # V3.27.0
-import OptimizationMOI              # V0.4.2
-import Ipopt                        # V1.6.5
-import FiniteDiff                   # V2.23.1
-import XLSX                         # V0.10.1
-import StructuralDesignOptimization # Under development
-using CairoMakie                    # V0.12.5
-CairoMakie.activate!(type = :png, px_per_unit = 5)
-set_theme!(theme_latexfonts())
+import PyCall 
+import Optimization 
+import OptimizationMOI 
+import Ipopt 
+import FiniteDiff 
+import XLSX 
+import StructuralDesignOptimization
+using CairoMakie 
+CairoMakie.activate!(type = :svg)
+CairoMakie.set_theme!(theme_latexfonts())
 
 # Load the OpenSeesPy package:
 ops = PyCall.pyimport("openseespy.opensees")
 
 # Define an OpenSeesPy model of a planar frame subjected to gravity loads:
-# Define an OpenSeesPy model of a planar frame subjected to gravity loads:
-function PlanarFrame(u, p)
+function PlanarFrame(x, p; num_subdivisions = 10, num_steps = 10)
     # --------------------------------------------------
     # USER INPUT
     # --------------------------------------------------
     # Unpack the design variables and parameters:
-    A_g_B, I_x_B, _, A_g_C, I_x_C, _ = u
-    w_D, _, NumSubdivisions, NumSteps = p
+    d_C, b_f_C, t_f_C, t_w_C, d_B, b_f_B, t_f_B, t_w_B = x
+    E, F_y, ρ, 
+    ϕ_c, ϕ_t, ϕ_b, 
+    γ_D, γ_L, γ_W, 
+    P_D, P_L, P_W, 
+    w_D, w_L, w_W, 
+    τ_b0_C, τ_b0_B = p
+    
+    # Convert the cross-sectional dimensions of all members into their cross-sectional properties:
+    A_g_C  = StructuralDesignOptimization.compute_A_g(d_C, b_f_C, t_f_C, t_w_C)
+    I_xx_C = StructuralDesignOptimization.compute_I_xx(d_C, b_f_C, t_f_C, t_w_C)
+    A_g_B  = StructuralDesignOptimization.compute_A_g(d_B, b_f_B, t_f_B, t_w_B)
+    I_xx_B = StructuralDesignOptimization.compute_I_xx(d_B, b_f_B, t_f_B, t_w_B)
 
-    # Make sure that the data types are correct:
-    NumSubdivisions = Int(NumSubdivisions)
-    NumSteps        = Int(NumSteps)
-
-    # Define the Nodes:
+    # Define the nodes:
     # [Node ID, x-coordinate, y-coordinate]
-    Nodes = [
+    nodes = [
         (1,  0 * 12, 10 * 12)
         (2, 10 * 12, 10 * 12)
         (3,  0 * 12,  0 * 12)
@@ -41,28 +43,28 @@ function PlanarFrame(u, p)
     
     # Define the elements:
     # [Element ID, Node (i) ID, Node (j) ID, Young's modulus, Gross cross-sectional area, Moment of inertia]
-    Elements = [
-        (1, 1, 2, 29000, A_g_B, I_x_B)
-        (2, 3, 1, 29000, A_g_C, I_x_C)
-        (3, 4, 2, 29000, A_g_C, I_x_C)]
+    elements = [
+        (1, 1, 2, E, A_g_B, I_xx_B)
+        (2, 3, 1, E, A_g_C, I_xx_C)
+        (3, 4, 2, E, A_g_C, I_xx_C)]
 
     # Define the boundary conditions:
-    BoundaryConditions = [
+    boundary_conditions = [
         (3, 1, 1, 1)
         (4, 1, 1, 1)]
 
     # Define the distributed loads:
-    DistributedLoads = [
-        (1, w_D)]
+    distributed_loads = [
+        (1, w_L)]
 
     # --------------------------------------------------
     # DO NOT MODIFY THE CODE BELOW
     # --------------------------------------------------
     # Subdivide the elements:
-    NewNodes, NewElements, _, ElementMap = StructuralDesignOptimization.SubdivideElements(Nodes, Elements, NumSubdivisions)
+    new_nodes, new_elements, _, element_map = StructuralDesignOptimization.subdivide_elements(nodes, elements, num_subdivisions)
 
     # Compute the element properties of the original elements:
-    L, α = StructuralDesignOptimization.ComputeElementProperties(NewNodes, NewElements)
+    _, θ = StructuralDesignOptimization.compute_element_properties(new_nodes, new_elements)
 
     # Remove any previous models:
     ops.wipe()
@@ -70,35 +72,35 @@ function PlanarFrame(u, p)
     # Define the model parameters:
     ops.model("basic", "-ndm", 2, "-ndf", 3)
 
-    # Define the Nodes:
-    for NewNode in NewNodes
-        ops.node(NewNode...)
+    # Define the nodes:
+    for new_node in new_nodes
+        ops.node(new_node...)
     end
 
     # Define the boundary conditions:
-    for BoundaryCondition in BoundaryConditions
-        ops.fix(BoundaryCondition...)
+    for boundary_condition in boundary_conditions
+        ops.fix(boundary_condition...)
     end
 
     # Define the cross-sectional properties:
-    for NewElement in NewElements
-        ops.section("Elastic", NewElement[1], NewElement[4], NewElement[5], NewElement[6])
+    for new_element in new_elements
+        ops.section("Elastic", new_element[1], new_element[4], new_element[5], new_element[6])
     end
 
     # Define the transformation:
     ops.geomTransf("PDelta", 1)
 
     # Define the elements:
-    for NewElement in NewElements
-        ops.element("elasticBeamColumn", NewElement[1], NewElement[2], NewElement[3], NewElement[1], 1)
+    for new_element in new_elements
+        ops.element("elasticBeamColumn", new_element[1], new_element[2], new_element[3], new_element[1], 1)
     end
 
     # Define the loads:
     ops.timeSeries("Linear", 1)
     ops.pattern("Plain", 1, 1)
-    for DistributedLoads in DistributedLoads
-        for i in ElementMap[DistributedLoads[1], 2:end]
-            ops.eleLoad("-ele", i, "-type", "-beamUniform", DistributedLoads[2])
+    for distributed_load in distributed_loads
+        for i in element_map[distributed_load[1], 2:end]
+            ops.eleLoad("-ele", i, "-type", "-beamUniform", distributed_load[2])
         end
     end
 
@@ -109,33 +111,33 @@ function PlanarFrame(u, p)
     ops.algorithm("Linear")
 
     # Solve:
-    ops.integrator("LoadControl", 1 / NumSteps)
+    ops.integrator("LoadControl", 1 / num_steps)
     ops.analysis("Static")
-    ops.analyze(NumSteps)
+    ops.analyze(num_steps)
 
     # Compute the internal element forces in global coordinates:
-    GlobalElementForces = [ops.eleForce(i) for i in eachindex(NewElements)]
+    global_element_forces = [ops.eleForce(i) for i in eachindex(new_elements)]
 
     # Compute the internal element forces in local coordinates:
-    LocalElementForces = StructuralDesignOptimization.ConvertElementForcesG2L(NewElements, GlobalElementForces, α)
+    local_element_forces = StructuralDesignOptimization.convert_element_forces_G2L(new_elements, global_element_forces, θ)
 
     # Convert the internal forces to a common sign convention:
-    LocalElementForces[:, 1:3] = (-1) * LocalElementForces[:, 1:3]
+    local_element_forces[:, 1:3] = (-1) * local_element_forces[:, 1:3]
 
     # Extract the internal forces:
-    N = zeros(length(Elements), 1 + NumSubdivisions + 1) # Interal axial forces
-    M = zeros(length(Elements), 1 + NumSubdivisions + 1) # Interal bending moments
-    for Element in Elements
+    N = zeros(length(elements), 1 + num_subdivisions + 1) # Interal axial forces
+    M = zeros(length(elements), 1 + num_subdivisions + 1) # Interal bending moments
+    for Element in elements
         N[Element[1], 1] = Element[1]
         M[Element[1], 1] = Element[1]
 
-        for i in 1:NumSubdivisions
-            N[Element[1], 1 + i] = LocalElementForces[ElementMap[Element[1], 1 + i], 1]
-            M[Element[1], 1 + i] = LocalElementForces[ElementMap[Element[1], 1 + i], 3]
+        for i in 1:num_subdivisions
+            N[Element[1], 1 + i] = local_element_forces[element_map[Element[1], 1 + i], 1]
+            M[Element[1], 1 + i] = local_element_forces[element_map[Element[1], 1 + i], 3]
 
-            if i == NumSubdivisions
-                N[Element[1], 1 + i + 1] = LocalElementForces[ElementMap[Element[1], 1 + i], 4]
-                M[Element[1], 1 + i + 1] = LocalElementForces[ElementMap[Element[1], 1 + i], 6]
+            if i == num_subdivisions
+                N[Element[1], 1 + i + 1] = local_element_forces[element_map[Element[1], 1 + i], 4]
+                M[Element[1], 1 + i + 1] = local_element_forces[element_map[Element[1], 1 + i], 6]
             end
         end
     end
@@ -143,7 +145,7 @@ function PlanarFrame(u, p)
     # Compute the required strengths:
     M_r = Float64[]
     P_r = Float64[]
-    for Element in Elements
+    for Element in elements
         # Find the point of maximum bending moment:
         _, M_r_temp_loc = findmax(abs.(M[Element[1], 2:end]))
 
@@ -160,64 +162,64 @@ function PlanarFrame(u, p)
 end
 
 # Define the constraints:
-EnvelopingConstraintsB = float.(XLSX.readxlsx("Enveloping Constraints.xlsx")["Beams"][2:end, :])
-Ξ_B = EnvelopingConstraintsB[:, 1:3]
-ξ_B = EnvelopingConstraintsB[:, 4]
+enveloping_constraints_B = float.(XLSX.readxlsx("Enveloping constraints.xlsx")["Beams"][2:end, :])
+Ξ_B = enveloping_constraints_B[:, 1:3]
+ξ_B = enveloping_constraints_B[:, 4]
 
-EnvelopingConstraintsC = float.(XLSX.readxlsx("Enveloping Constraints.xlsx")["Columns"][2:end, :])
-Ξ_C = EnvelopingConstraintsC[:, 1:3]
-ξ_C = EnvelopingConstraintsC[:, 4]
+enveloping_constraints_C = float.(XLSX.readxlsx("Enveloping constraints.xlsx")["Columns"][2:end, :])
+Ξ_C = enveloping_constraints_C[:, 1:3]
+ξ_C = enveloping_constraints_C[:, 4]
 
-TotalNumEnvelopingConstraints = size(EnvelopingConstraintsC, 1) + size(EnvelopingConstraintsB, 1)
-LowerBound = [fill(-Inf, TotalNumEnvelopingConstraints); 0; 0; 0]
-UpperBound = [ξ_B; ξ_C; 1; 1; 1]
+total_num_enveloping_constraints = size(enveloping_constraints_C, 1) + size(enveloping_constraints_B, 1)
+lower_bound = [fill(-Inf, total_num_enveloping_constraints); 0; 0; 0]
+upper_bound = [ξ_B; ξ_C; 1; 1; 1]
 
-function Constraints(res, u, p)
+function constraints(res, u, p)
     # Define the enveloping constraints:
-    EC_B = Ξ_B * u[1:3]
-    EC_C = Ξ_C * u[4:6]
+    enveloping_constraints_B = Ξ_B * u[1:3]
+    enveloping_constraints_C = Ξ_C * u[4:6]
     
-    # Define the stress constraints:
+    # Define the strength constraints:
     P_r, M_r = PlanarFrame(u, p)
 
     # Compute the design strengths for all members:
     if P_r[1] < 0
-        P_c_1 = StructuralDesignOptimization.ComputeDesignCompressiveStrength(0.90, 29000, 50, 1, 120, u[1:2]...)
+        P_c_1 = StructuralDesignOptimization.compute_P_n_c(0.90, 29000, 50, 1, 120, u[1:2]...)
     else
-        P_c_1 = StructuralDesignOptimization.ComputeDesignTensileStrength(0.90, 50, u[1])
+        P_c_1 = StructuralDesignOptimization.compute_P_n_t(0.90, 50, u[1])
     end
 
     if P_r[2] < 0
-        P_c_2 = StructuralDesignOptimization.ComputeDesignCompressiveStrength(0.90, 29000, 50, 1, 120, u[4:5]...)
+        P_c_2 = StructuralDesignOptimization.compute_P_n_c(0.90, 29000, 50, 1, 120, u[4:5]...)
     else
-        P_c_2 = StructuralDesignOptimization.ComputeDesignTensileStrength(0.90, 50, u[4])
+        P_c_2 = StructuralDesignOptimization.compute_P_n_t(0.90, 50, u[4])
     end
 
     if P_r[3] < 0
-        P_c_3 = StructuralDesignOptimization.ComputeDesignCompressiveStrength(0.90, 29000, 50, 1, 120, u[4:5]...)
+        P_c_3 = StructuralDesignOptimization.compute_P_n_c(0.90, 29000, 50, 1, 120, u[4:5]...)
     else
-        P_c_3 = StructuralDesignOptimization.ComputeDesignTensileStrength(0.90, 50, u[4])
+        P_c_3 = StructuralDesignOptimization.compute_P_n_t(0.90, 50, u[4])
     end
 
-    M_c_1 = StructuralDesignOptimization.ComputeDesignFlexuralStrength(0.90, 50, u[3])
-    M_c_2 = StructuralDesignOptimization.ComputeDesignFlexuralStrength(0.90, 50, u[6])
-    M_c_3 = StructuralDesignOptimization.ComputeDesignFlexuralStrength(0.90, 50, u[6])
+    M_c_1 = StructuralDesignOptimization.compute_M_n(0.90, 50, u[3])
+    M_c_2 = StructuralDesignOptimization.compute_M_n(0.90, 50, u[6])
+    M_c_3 = StructuralDesignOptimization.compute_M_n(0.90, 50, u[6])
 
     # Define the stress constraints:
-    SC = [
-        StructuralDesignOptimization.ComputeBeamColumnInteraction(abs(P_r[1]), P_c_1, abs(M_r[1]), M_c_1, 0, 1)
-        StructuralDesignOptimization.ComputeBeamColumnInteraction(abs(P_r[2]), P_c_2, abs(M_r[2]), M_c_2, 0, 1)
-        StructuralDesignOptimization.ComputeBeamColumnInteraction(abs(P_r[3]), P_c_3, abs(M_r[3]), M_c_3, 0, 1)]
+    strength_constraints = [
+        StructuralDesignOptimization.compute_beam_column_interaction(abs(P_r[1]), P_c_1, abs(M_r[1]), M_c_1, 0, 1)
+        StructuralDesignOptimization.compute_beam_column_interaction(abs(P_r[2]), P_c_2, abs(M_r[2]), M_c_2, 0, 1)
+        StructuralDesignOptimization.compute_beam_column_interaction(abs(P_r[3]), P_c_3, abs(M_r[3]), M_c_3, 0, 1)]
 
     # Combine the constraints:
-    AllConstraints = [EC_B; EC_C; SC]
+    combined_constraints = [enveloping_constraints_B; enveloping_constraints_C; strength_constraints]
 
-    return (res .= AllConstraints)
+    return (res .= combined_constraints)
 end
 
 # Define the callback function:
 Storage = []
-function Callback(s, l)
+function callback(s, l)
     # Extract the state of the optimization problem:
     CurrentState = [s.iter, s.u, s.objective]
 
@@ -234,13 +236,13 @@ u₀ = [
 p₀ = [-10 / 12, 490 / 12 ^ 3, 10, 10]
 
 # Solve the optimization problem:
-Objective = Optimization.OptimizationFunction((u, p) -> p[2] * (120 * u[1] + 2 * 120 * u[4]), Optimization.AutoFiniteDiff(), cons = Constraints)
+Objective = Optimization.OptimizationFunction((u, p) -> p[2] * (120 * u[1] + 2 * 120 * u[4]), Optimization.AutoFiniteDiff(), cons = constraints)
 Problem   = Optimization.OptimizationProblem(Objective, u₀, p₀, 
     lb = [  3.840,    39.600,   11.400,   3.550,    11.300,    6.280],
     ub = [257.000, 18100.000, 2030.000, 272.000, 73000.000, 4130.000],
-    lcons = LowerBound, 
-    ucons = UpperBound)
-Solution  = Optimization.solve(Problem, Ipopt.Optimizer(), callback = Callback; tol = 1E-3, acceptable_tol = 1E-3, max_iter = 100)
+    lcons = lower_bound, 
+    ucons = upper_bound)
+Solution  = Optimization.solve(Problem, Ipopt.Optimizer(), callback = callback; tol = 1E-3, acceptable_tol = 1E-3, max_iter = 100)
 
 # Solution for the beams' section properties:
 SolutionB = Matrix{Float64}(undef, length(Storage), 3)

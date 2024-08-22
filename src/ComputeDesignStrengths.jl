@@ -1,19 +1,23 @@
 # NOTE: Refer to Chapter D of the AISC 360-22 Specification for more information.
-function ComputeDesignTensileStrength(ϕ_t, F_y, A_g)
+function compute_P_n_t(
+        F_y,    # Material properties
+        A_g     # Cross-sectional properties
+    )
     # Compute the nominal tensile strength:
     P_n = F_y * A_g
 
-    # Compute the design tensile strength:
-    P_c = ϕ_t * P_n
-
     # Return the result:
-    return P_c
+    return P_n
 end
 
 # NOTE: Refer to Chapter E of the AISC 360-22 Specification for more information.
-function ComputeDesignCompressiveStrength(ϕ_c, E, F_y, K, L, A_g, I_x)
+function compute_P_n_c(
+        E, F_y,     # Material properties
+        K, L,       # Member properties
+        A_g, I_xx   # Cross-sectional properties
+    )
     # Compute the radius of gyration:
-    r = sqrt(I_x / A_g)
+    r = sqrt(I_xx / A_g)
 
     # Compute the slenderness ratio:
     λ = (K * L) / r
@@ -31,21 +35,18 @@ function ComputeDesignCompressiveStrength(ϕ_c, E, F_y, K, L, A_g, I_x)
     # Compute the nominal compressive strength:
     P_n = F_n * A_g
 
-    # Compute the design compressive strength:
-    P_c = ϕ_c * P_n
-
     # Return the result:
-    return P_c
+    return P_n
 end
 
 # NOTE: Refer to Chapter F of the AISC 360-22 Specification for more information.
-function ComputeDesignFlexuralStrength(ϕ_b, F_y, Z_x)
+function compute_M_n(
+        F_y,    # Material properties
+        Z       # Cross-sectional properties
+    )
     # Compute the nominal flexural strength:
-    M_n = F_y * Z_x
-
-    # Compute the design flexural strength:
-    M_c = ϕ_b * M_n
+    M_n = F_y * Z
 
     # Return the result:
-    return M_c
+    return M_n
 end

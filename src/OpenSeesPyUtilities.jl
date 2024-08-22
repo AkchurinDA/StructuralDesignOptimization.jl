@@ -1,5 +1,5 @@
 # The following function is used to subdivide each element of a model into more element.
-function SubdivideElements(OldNodes, OldElements, NumSubdivisions)
+function subdivide_elements(OldNodes, OldElements, NumSubdivisions)
     # Preallocate new OldElements:
     NumOldElements = length(OldElements)
     NumNewElements = NumOldElements * NumSubdivisions
@@ -55,7 +55,7 @@ function SubdivideElements(OldNodes, OldElements, NumSubdivisions)
 end
 
 # The following function is used to compute each element'S length and orientation.
-function ComputeElementProperties(Nodes, Elements)
+function compute_element_properties(Nodes, Elements)
     NumElements = length(Elements)
 
     L = Vector{Float64}(undef, NumElements)
@@ -78,7 +78,7 @@ function ComputeElementProperties(Nodes, Elements)
 end
 
 # The following function is used to convert the internal element forces from the global to the local coordinate system.
-function ConvertElementForcesG2L(Elements, GlobalElementForces, θ)
+function convert_element_forces_G2L(Elements, GlobalElementForces, θ)
     NumElements = length(Elements)
 
     LocalElemntForces = Matrix{Float64}(undef, NumElements, 6)

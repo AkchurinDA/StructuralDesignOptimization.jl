@@ -1,23 +1,19 @@
-# AUTHOR:               Damir Akchurin
-# DATE CREATED:         08/07/2024
-# DATE LAST MODIFIED:   08/08/2024
-
 # Preamble:
-import XLSX         # V0.10.1
-import DataFrames   # V1.6.1
+import XLSX      
+import DataFrames
 
 # Define the material properties of interest:
 E   = 29000
 F_y = 50
 
 # Load all the sections from the AISC Construction Design Manual:
-AllSections = DataFrames.DataFrame(XLSX.readtable("Sections.xlsx", "All sections"))
+AllSections = DataFrames.DataFrame(XLSX.readtable("Identify appropriate sections/Sections.xlsx", "All sections"))
 
 # Extract the data:
-d            = float.(AllSections[:, :d])
-b_f          = float.(AllSections[:, :b_f])
-t_f          = float.(AllSections[:, :t_f])
-t_w          = float.(AllSections[:, :t_w])
+d   = float.(AllSections[:, :d  ])
+b_f = float.(AllSections[:, :b_f])
+t_f = float.(AllSections[:, :t_f])
+t_w = float.(AllSections[:, :t_w])
 
 # Check the sections whether they are non-slender in compression and compact in flexure:
 AllAppropriateSectionsIndex = Vector{Bool}(undef, size(AllSections, 1))
@@ -29,19 +25,19 @@ for (i, (d, b_f, t_f, t_w)) in enumerate(zip(d, b_f, t_f, t_w))
 end
 
 # Extract all appropriate sections:
-AllAppropriateSections = SectionDatabase[AllAppropriateSectionsIndex, :]
+AllAppropriateSections = AllSections[AllAppropriateSectionsIndex, :]
 
 # Extract the appropriate sections for beams and columns:
 # NOTE: This step is done manually by the user depending on the typical practical considerations.
-AppropriateSectionsB = AllAppropriateSections
 AppropriateSectionsC = AllAppropriateSections[90:161, :]
+AppropriateSectionsB = AllAppropriateSections
 
 # Update the Excel file:
 XLSX.writetable("Sections.xlsx", 
-    "All sections"                   => AllSections,
-    "All appropriate sections"       => AllAppropriateSections,
-    "Appropriate sections (Beams)"   => AppropriateSectionsB,
-    "Appropriate sections (Columns)" => AppropriateSectionsC,
+    "All sections"             => AllSections,
+    "All appropriate sections" => AllAppropriateSections,
+    "Appropriate sections (C)" => AppropriateSectionsC,
+    "Appropriate sections (B)" => AppropriateSectionsB,
     overwrite = true)
 
 # Define a function that checks if a section is non-slender in compression:
